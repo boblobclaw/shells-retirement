@@ -4,9 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import { ScenarioModal } from '@/components/forms/ScenarioModal';
+import { LifestyleCard } from '@/components/ai/LifestyleCard';
 
 export default function ScenariosPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [calculatingId, setCalculatingId] = useState<string | null>(null);
   const userId = 'test-user-id';
   
@@ -30,27 +32,30 @@ export default function ScenariosPage() {
     },
   });
 
+  const generateRecommendations = trpc.ai.generateRecommendations.useMutation({
+    onSuccess: () => {
+      utils.scenario.list.invalidate({ userId });
+    },
+  });
+
   const totalBalance = accounts?.reduce((sum, acc) => sum + Number(acc.currentBalance), 0) || 0;
-  const currentAge = 45; // TODO: Get from user
+  const currentAge = 45;
+
+  const selectedScenarioData = scenarios?.find(s => s.id === selectedScenario);
 
   if (isLoading) {
     return (
       <main className="min-h-screen p-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <p>Loading scenarios...</p>
         </div>
       </main>
     );
   }
 
-  const handleRunCalculation = async (scenarioId: string) => {
-    setCalculatingId(scenarioId);
-    runCalculation.mutate({ scenarioId, userId });
-  };
-
   return (
     <main className="min-h-screen p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
             <Link href="/expenses" className="text-blue-600 hover:underline">← Back to Expenses</Link>
@@ -78,77 +83,146 @@ export default function ScenariosPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {scenarios && scenarios.length > 0 ? (
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Scenario</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Retire At</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Annual Spending</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Success Rate</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {scenarios.map((scenario) => {
-                  const result = scenario.results?.[0];
-                  const successRate = result?.successProbability || 0;
-                  const annualSpending = Number(scenario.essentialSpending) + Number(scenario.discretionarySpending);
-                  
-                  return (
-                    <tr key={scenario.id}>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          {scenario.name}
-                          {scenario.isDefault && (
-                            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">Default</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">{scenario.retirementAge}</td>
-                      <td className="px-6 py-4">${annualSpending.toLocaleString()}</td>
-                      <td className="px-6 py-4">
-                        {result ? (
-                          <span className={`font-bold ${
-                            successRate >= 80 ? 'text-green-600' :
-                            successRate >= 60 ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {Math.round(successRate)}%
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">Not calculated</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button 
-                          onClick={() => handleRunCalculation(scenario.id)}
-                          disabled={calculatingId === scenario.id}
-                          className="text-blue-600 hover:underline mr-3 disabled:opacity-50"
-                        >
-                          {calculatingId === scenario.id ? 'Calculating...' : 'Run Calc'}
-                        </button>
-                        <button 
-                          onClick={() => {
-                            if (confirm('Delete this scenario?')) {
-                              deleteScenario.mutate({ id: scenario.id });
-                            }
-                          }}
-                          className="text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </td>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              {scenarios && scenarios.length > 0 ? (
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Scenario</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Retire At</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Annual Spending</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Success Rate</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : (
-            <div className="p-8 text-center text-gray-500">
-              <p>No scenarios yet. Create your first retirement scenario to get started.</p>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {scenarios.map((scenario) => {
+                      const result = scenario.results?.[0];
+                      const successRate = result?.successProbability || 0;
+                      const annualSpending = Number(scenario.essentialSpending) + Number(scenario.discretionarySpending);
+                      const isSelected = selectedScenario === scenario.id;
+                      
+                      return (
+                        <tr 
+                          key={scenario.id}
+                          className={isSelected ? 'bg-blue-50' : ''}
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <button
+                                onClick={() => setSelectedScenario(scenario.id)}
+                                className="text-left hover:text-blue-600"
+                              >
+                                {scenario.name}
+                              </button>
+                              {scenario.isDefault && (
+                                <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">Default</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">{scenario.retirementAge}</td>
+                          <td className="px-6 py-4">${annualSpending.toLocaleString()}</td>
+                          <td className="px-6 py-4">
+                            {result ? (
+                              <span className={`font-bold ${
+                                successRate >= 80 ? 'text-green-600' :
+                                successRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
+                                {Math.round(successRate)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">Not calculated</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleRunCalculation(scenario.id)}
+                                disabled={calculatingId === scenario.id}
+                                className="text-blue-600 hover:underline text-sm disabled:opacity-50"
+                              >
+                                {calculatingId === scenario.id ? '...' : 'Run'}
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  if (confirm('Delete this scenario?')) {
+                                    deleteScenario.mutate({ id: scenario.id });
+                                  }
+                                }}
+                                className="text-red-600 hover:underline text-sm"
+                              >
+                                Del
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-8 text-center text-gray-500">
+                  <p>No scenarios yet. Create your first retirement scenario.</p>
+                </div>
+              )}
             </div>
-          )}
+
+            {selectedScenarioData && selectedScenarioData.results?.[0] && (
+              <div className="mt-6 bg-white rounded-lg shadow-md p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Recommendations</h3>
+                  <button
+                    onClick={() => generateRecommendations.mutate({ scenarioId: selectedScenarioData.id })}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                
+                {selectedScenarioData.recommendations && selectedScenarioData.recommendations.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedScenarioData.recommendations.map((rec) => (
+                      <div key={rec.id} className="p-3 bg-gray-50 rounded border-l-4 border-blue-500">
+                        <div className="flex justify-between">
+                          <h4 className="font-medium">{rec.title}</h4>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            rec.impact === 'high' ? 'bg-red-100 text-red-700' :
+                            rec.impact === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {rec.impact} impact
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">{rec.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => generateRecommendations.mutate({ scenarioId: selectedScenarioData.id })}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Generate recommendations for this scenario
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-1">
+            {selectedScenarioData ? (
+              <LifestyleCard 
+                scenarioId={selectedScenarioData.id}
+                description={selectedScenarioData.lifestyleDescription}
+              />
+            ) : (
+              <div className="bg-gray-100 rounded-lg p-6 text-center text-gray-500">
+                <p>Select a scenario to view AI lifestyle description</p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-8 flex justify-between">
@@ -175,6 +249,11 @@ export default function ScenariosPage() {
       />
     </main>
   );
+
+  function handleRunCalculation(scenarioId: string) {
+    setCalculatingId(scenarioId);
+    runCalculation.mutate({ scenarioId, userId });
+  }
 }
 
 function StatCard({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
