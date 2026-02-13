@@ -1,0 +1,17 @@
+.DS_Store
+node_modules
+.next
+.nuxt
+.output
+.cache
+.vercel
+.env
+.env.local
+.env.*.local
+dist
+*.log
+*.tsbuildinfo
+.turbo
+prisma/*.db
+prisma/migrations/*
+!prisma/migrations/migration_lock.toml

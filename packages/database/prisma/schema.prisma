@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  subscription  SubscriptionTier @default(free)
+  
+  // Profile
+  birthDate     DateTime?
+  gender        Gender?
+  maritalStatus MaritalStatus?
+  lifeExpectancy Int?
+  
+  // Location
+  city          String?
+  state         String?
+  zipCode       String?
+  
+  // Relations
+  accounts      Account[]
+  expenses      Expense[]
+  incomeSources IncomeSource[]
+  scenarios     Scenario[]
+  
+  @@map("users")
+}
+
+enum SubscriptionTier {
+  free
+  premium
+  pro
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum MaritalStatus {
+  single
+  married
+  divorced
+  widowed
+}
+
+model Account {
+  id                    String       @id @default(uuid())
+  userId                String
+  name                  String
+  type                  AccountType
+  
+  // Current status
+  currentBalance        Decimal      @db.Decimal(15, 2)
+  
+  // Contributions
+  monthlyContribution   Decimal      @default(0) @db.Decimal(10, 2)
+  employerMatchPercent  Decimal      @default(0) @db.Decimal(5, 2)
+  employerMatchMax      Decimal      @default(0) @db.Decimal(5, 2)
+  
+  // Tax treatment
+  taxTreatment          TaxTreatment
+  
+  // Allocation
+  stockAllocation       Int          @default(60)
+  bondAllocation        Int          @default(30)
+  cashAllocation        Int          @default(10)
+  
+  // RMD info
+  rmdStartAge           Int?
+  
+  // Relations
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("accounts")
+}
+
+enum AccountType {
+  _401k
+  _403b
+  _457
+  traditional_ira
+  roth_ira
+  sep_ira
+  simple_ira
+  hsa
+  taxable
+  annuity
+  pension
+  cash_savings
+}
+
+enum TaxTreatment {
+  pre_tax
+  post_tax
+  taxable
+}
+
+model Expense {
+  id              String          @id @default(uuid())
+  userId          String
+  category        ExpenseCategory
+  subcategory     String?
+  
+  amount          Decimal         @db.Decimal(10, 2)
+  type            ExpenseType
+  
+  // Inflation
+  inflationRate   Decimal         @default(3.0) @db.Decimal(4, 2)
+  
+  // Timing
+  startAge        Int             @default(0)
+  endAge          Int?
+  
+  // Healthcare
+  healthcarePhase HealthcarePhase?
+  
+  // Relations
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("expenses")
+}
+
+enum ExpenseCategory {
+  housing
+  healthcare
+  food
+  transportation
+  utilities
+  insurance
+  debt
+  dining_out
+  travel
+  entertainment
+  hobbies
+  shopping
+  gifts_charity
+  flex
+}
+
+enum ExpenseType {
+  essential
+  discretionary
+}
+
+enum HealthcarePhase {
+  pre_medicare
+  medicare
+}
+
+model IncomeSource {
+  id            String      @id @default(uuid())
+  userId        String
+  name          String
+  type          IncomeType
+  
+  annualAmount  Decimal     @db.Decimal(10, 2)
+  startAge      Int
+  endAge        Int?
+  
+  // Adjustments
+  colaRate      Decimal     @default(2.0) @db.Decimal(4, 2)
+  taxTreatment  IncomeTaxTreatment
+  
+  // Social Security specific
+  ssaStartAge   Int?
+  
+  // Relations
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("income_sources")
+}
+
+enum IncomeType {
+  social_security
+  pension
+  annuity
+  rental
+  part_time
+  other
+}
+
+enum IncomeTaxTreatment {
+  taxable
+  tax_free
+}
+
+model Scenario {
+  id                      String                @id @default(uuid())
+  userId                  String
+  name                    String
+  description             String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  isDefault               Boolean               @default(false)
+  
+  // Parameters
+  retirementAge           Int
+  targetCity              String?
+  targetState             String?
+  
+  // Spending
+  essentialSpending       Decimal               @db.Decimal(10, 2)
+  discretionarySpending   Decimal               @db.Decimal(10, 2)
+  
+  // Strategy
+  withdrawalStrategy      WithdrawalStrategy
+  socialSecurityStrategy  SocialSecurityStrategy
+  
+  // Market assumptions
+  expectedReturn          Decimal               @default(7.0) @db.Decimal(4, 2)
+  inflationRate           Decimal               @default(3.0) @db.Decimal(4, 2)
+  
+  // AI-generated content
+  lifestyleDescription    String?               @db.Text
+  insights                String[]              @default([])
+  
+  // Relations
+  user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results                 CalculationResult[]
+  recommendations         Recommendation[]
+  projections             YearProjection[]
+  
+  @@map("scenarios")
+}
+
+enum WithdrawalStrategy {
+  four_percent
+  guardrails
+  buckets
+  tax_efficient
+  variable_percentage
+}
+
+enum SocialSecurityStrategy {
+  early
+  full
+  delayed
+}
+
+model CalculationResult {
+  id                      String    @id @default(uuid())
+  scenarioId              String
+  
+  successProbability      Decimal   @db.Decimal(5, 2)
+  medianEndingBalance     Decimal   @db.Decimal(15, 2)
+  worstCaseBalance        Decimal   @db.Decimal(15, 2)
+  yearOfFirstShortfall    Int?
+  sustainableWithdrawalRate Decimal @db.Decimal(5, 2)
+  
+  createdAt               DateTime  @default(now())
+  
+  scenario                Scenario  @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  
+  @@map("calculation_results")
+}
+
+model YearProjection {
+  id              String    @id @default(uuid())
+  scenarioId      String
+  
+  year            Int
+  age             Int
+  startingBalance Decimal   @db.Decimal(15, 2)
+  contributions   Decimal   @default(0) @db.Decimal(15, 2)
+  withdrawals     Decimal   @default(0) @db.Decimal(15, 2)
+  endingBalance   Decimal   @db.Decimal(15, 2)
+  expenses        Decimal   @default(0) @db.Decimal(15, 2)
+  income          Decimal   @default(0) @db.Decimal(15, 2)
+  
+  scenario        Scenario  @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  
+  @@map("year_projections")
+}
+
+model Recommendation {
+  id                    String    @id @default(uuid())
+  scenarioId            String
+  
+  title                 String
+  description           String    @db.Text
+  impact                ImpactLevel
+  estimatedImprovement  Decimal   @db.Decimal(5, 2)
+  actionSteps           String[]
+  tradeOffs             String[]  @default([])
+  
+  createdAt             DateTime  @default(now())
+  
+  scenario              Scenario  @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  
+  @@map("recommendations")
+}
+
+enum ImpactLevel {
+  high
+  medium
+  low
+}
