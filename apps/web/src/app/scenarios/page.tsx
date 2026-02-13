@@ -24,13 +24,13 @@ export default function ScenariosPage() {
 
   const deleteScenario = trpc.scenario.delete.useMutation({
     onSuccess: () => {
-      utils.scenario.list.invalidate({ userId });
+      utils.scenario.list.invalidate();
     },
   });
 
   const runCalculation = trpc.calculation.runFullScenario.useMutation({
     onSuccess: () => {
-      utils.scenario.list.invalidate({ userId });
+      utils.scenario.list.invalidate();
       setCalculatingId(null);
     },
     onError: () => {
@@ -40,12 +40,20 @@ export default function ScenariosPage() {
 
   const generateRecommendations = trpc.ai.generateRecommendations.useMutation({
     onSuccess: () => {
-      utils.scenario.list.invalidate({ userId });
+      utils.scenario.list.invalidate();
     },
   });
 
-  const totalBalance = accounts?.reduce((sum, acc) => sum + Number(acc.currentBalance), 0) || 0;
-  const currentAge = 45;
+  const totalBalance = accounts?.reduce((sum: number, acc: { currentBalance: number }) => sum + Number(acc.currentBalance), 0) || 0;
+
+  // Calculate current age from user's birth date
+  let currentAge: number | null = null;
+  if (user?.birthDate) {
+    const now = new Date();
+    const birth = new Date(user.birthDate);
+    currentAge = now.getFullYear() - birth.getFullYear() -
+      (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+  }
 
   const selectedScenarioData = scenarios?.find((s) => s.id === selectedScenario);
 
@@ -80,7 +88,7 @@ export default function ScenariosPage() {
         <div className="bg-blue-50 rounded-lg p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Quick Stats</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <StatCard label="Current Age" value={currentAge.toString()} />
+            <StatCard label="Current Age" value={currentAge !== null ? currentAge.toString() : 'Set birth date'} />
             <StatCard label="Total Savings" value={`$${totalBalance.toLocaleString()}`} />
             <StatCard label="Scenarios" value={scenarios?.length.toString() || '0'} />
             <StatCard
@@ -112,7 +120,7 @@ export default function ScenariosPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {scenarios.map((scenario) => {
+                    {scenarios.map((scenario: any) => {
                       const result = scenario.results?.[0];
                       const successRate = result?.successProbability || 0;
                       const annualSpending =
@@ -236,7 +244,7 @@ export default function ScenariosPage() {
 
                 {selectedScenarioData.recommendations && selectedScenarioData.recommendations.length > 0 ? (
                   <div className="space-y-3">
-                    {selectedScenarioData.recommendations.map((rec) => (
+                    {selectedScenarioData.recommendations.map((rec: any) => (
                       <div key={rec.id} className="p-3 bg-gray-50 rounded border-l-4 border-blue-500">
                         <div className="flex justify-between">
                           <h4 className="font-medium">{rec.title}</h4>
@@ -351,7 +359,7 @@ export default function ScenariosPage() {
             href="/expenses"
             className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
           >
-            ← Back to Expenses
+            &larr; Back to Expenses
           </Link>
           <Link href="/" className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
             Back to Home →
@@ -360,7 +368,6 @@ export default function ScenariosPage() {
       </div>
 
       <ScenarioModal
-        userId={userId}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {}}
@@ -370,7 +377,7 @@ export default function ScenariosPage() {
 
   function handleRunCalculation(scenarioId: string) {
     setCalculatingId(scenarioId);
-    runCalculation.mutate({ scenarioId, userId });
+    runCalculation.mutate({ scenarioId });
   }
 }
 
